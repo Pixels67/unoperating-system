@@ -2,28 +2,35 @@
 #![no_main]
 
 use core::panic::PanicInfo;
-use core::fmt::*;
-use unoperating_system::console::*;
+use unoperating_system::*;
 
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
+    println!("{_info}");
     loop {}
 }
 
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
-    CONSOLE.lock().write_str("===========================\\\n");
-    CONSOLE.lock().write_str("  _   _        ___  ____   |\n");
-    CONSOLE.lock().write_str(" | | | |_ __  / _ \\/ ___|  |\n");
-    CONSOLE.lock().write_str(" | | | | '_ \\| | | \\___ \\  |\n");
-    CONSOLE.lock().write_str(" | |_| | | | | |_| |___) | |\n");
-    CONSOLE.lock().write_str("  \\___/|_| |_|\\___/|____/  |\n");
-    CONSOLE.lock().write_str("                           |\n");
-    CONSOLE.lock().write_str("  v0.1.0 alpha             |\n");
-    CONSOLE.lock().write_str("===========================/\n");
+    write_start_text();
 
-    CONSOLE.lock().write_char('H');
-    CONSOLE.lock().write_str("ello! ");
-    write!(CONSOLE.lock(), "The numbers are {} and {}", 42, 1.0/3.0).unwrap();
+    print!("{}", 'H');
+    print!("ello! ");
+    println!("The numbers are {} and {}", 42, 1.0/3.0);
+    
+    panic!("panic attack");
+    
     loop {}
+}
+
+fn write_start_text() {
+    println!("===========================\\");
+    println!("  _   _        ___  ____   |");
+    println!(" | | | |_ __  / _ \\/ ___|  |");
+    println!(" | | | | '_ \\| | | \\___ \\  |");
+    println!(" | |_| | | | | |_| |___) | |");
+    println!("  \\___/|_| |_|\\___/|____/  |");
+    println!("                           |");
+    println!("  v0.1.0 alpha             |");
+    println!("===========================/");
 }

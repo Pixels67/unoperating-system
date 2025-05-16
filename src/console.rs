@@ -1,4 +1,5 @@
 use core::fmt;
+use core::fmt::Write;
 use volatile::Volatile;
 use lazy_static::lazy_static;
 use spin::Mutex;
@@ -154,7 +155,7 @@ impl Console {
     }
 }
 
-impl fmt::Write for Console {
+impl Write for Console {
     fn write_str(&mut self, str: &str) -> fmt::Result {
         self.write_str(str);
         Ok(())
@@ -223,4 +224,20 @@ impl VGABuffer {
             }
         }
     }
+}
+
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => ($crate::console::_print(format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+#[doc(hidden)]
+pub fn _print(args: fmt::Arguments) {
+    CONSOLE.lock().write_fmt(args).unwrap();
 }
