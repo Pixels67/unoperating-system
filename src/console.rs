@@ -1,8 +1,12 @@
+use core::fmt;
 use volatile::Volatile;
+use lazy_static::lazy_static;
+use spin::Mutex;
 
-const VGA_BUFFER: *mut u8 = 0xb8000 as *mut u8;
 const SCREEN_WIDTH: usize = 80;
 const SCREEN_HEIGHT: usize = 25;
+const VGA_BUFFER: *mut [Volatile<u8>; SCREEN_WIDTH * SCREEN_HEIGHT * 2] =
+    0xb8000 as *mut [Volatile<u8>; SCREEN_WIDTH * SCREEN_HEIGHT * 2];
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -72,6 +76,10 @@ impl ColorCode {
     }
 }
 
+lazy_static! {
+    pub static ref CONSOLE: Mutex<Console> = Mutex::new(Console::new());
+}
+
 pub struct Console {
     char_count: usize,
     vga_buffer: VGABuffer,
@@ -85,16 +93,14 @@ impl Console {
         }
     }
 
-    pub fn write_line(&mut self, str: &str) {
-        self.write_line_colored(str, ColorCode::new(Color::White, Color::Black));
+    pub fn write_str(&mut self, str: &str) {
+        self.write_str_colored(str, ColorCode::new(Color::White, Color::Black));
     }
 
-    pub fn write_line_colored(&mut self, str: &str, color: ColorCode) {
+    pub fn write_str_colored(&mut self, str: &str, color: ColorCode) {
         for char in str.chars() {
             self.write_char_colored(char, color);
         }
-
-        self.new_line();
     }
 
     pub fn write_char(&mut self, char: char) {
@@ -115,7 +121,7 @@ impl Console {
         self.vga_buffer
             .write_byte(self.get_column(), self.get_line(), byte, color);
         self.char_count += 1;
-        
+
         if self.char_count % SCREEN_WIDTH == 0 && self.get_line() >= SCREEN_HEIGHT {
             self.scroll(1);
         }
@@ -128,7 +134,7 @@ impl Console {
             self.scroll(1);
         }
     }
-    
+
     pub fn scroll(&mut self, lines: usize) {
         self.vga_buffer.scroll(lines);
         self.char_count -= SCREEN_WIDTH - self.get_column();
@@ -148,6 +154,13 @@ impl Console {
     }
 }
 
+impl fmt::Write for Console {
+    fn write_str(&mut self, str: &str) -> fmt::Result {
+        self.write_str(str);
+        Ok(())
+    }
+}
+
 #[repr(transparent)]
 pub struct VGABuffer {
     buffer: &'static mut [Volatile<u8>; SCREEN_WIDTH * SCREEN_HEIGHT * 2],
@@ -155,9 +168,8 @@ pub struct VGABuffer {
 
 impl VGABuffer {
     pub fn new() -> Self {
-        let buffer = unsafe {
-            &mut *(VGA_BUFFER as *mut [Volatile<u8>; SCREEN_WIDTH * SCREEN_HEIGHT * 2])
-        };
+        let buffer =
+            unsafe { &mut *VGA_BUFFER };
 
         let mut buffer = VGABuffer { buffer };
         buffer.clear();
@@ -178,7 +190,7 @@ impl VGABuffer {
     pub fn scroll(&mut self, lines: usize) {
         let line_size = SCREEN_WIDTH * 2;
         let screen_size = SCREEN_HEIGHT * line_size;
-        
+
         let start = lines * SCREEN_WIDTH;
         let end = SCREEN_WIDTH * SCREEN_HEIGHT;
 
@@ -193,9 +205,9 @@ impl VGABuffer {
             self.buffer[dst].write(self.buffer[src].read());
             self.buffer[dst + 1].write(self.buffer[src + 1].read());
         }
-        
+
         let start = (SCREEN_HEIGHT - lines) * SCREEN_WIDTH;
-        
+
         for i in start..end {
             let offset = i * 2;
             self.buffer[offset].write(0);
@@ -212,4 +224,3 @@ impl VGABuffer {
         }
     }
 }
-
