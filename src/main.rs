@@ -12,7 +12,7 @@ fn panic(_info: &PanicInfo) -> ! {
 #[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     let mut con = Console::new();
-    
+
     con.write_line("===========================\\");
     con.write_line("  _   _        ___  ____   |");
     con.write_line(" | | | |_ __  / _ \\/ ___|  |");
@@ -22,6 +22,6 @@ pub extern "C" fn _start() -> ! {
     con.write_line("                           |");
     con.write_line("  v0.1.0 alpha             |");
     con.write_line("===========================/");
-    
+
     loop {}
 }
