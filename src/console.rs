@@ -1,3 +1,5 @@
+use volatile::Volatile;
+
 const VGA_BUFFER: *mut u8 = 0xb8000 as *mut u8;
 const SCREEN_WIDTH: usize = 80;
 const SCREEN_HEIGHT: usize = 25;
@@ -148,59 +150,66 @@ impl Console {
 
 #[repr(transparent)]
 pub struct VGABuffer {
-    buffer: *mut u8,
+    buffer: &'static mut [Volatile<u8>; SCREEN_WIDTH * SCREEN_HEIGHT * 2],
 }
 
 impl VGABuffer {
     pub fn new() -> Self {
-        let mut buffer = VGABuffer { buffer: VGA_BUFFER };
+        let buffer = unsafe {
+            &mut *(VGA_BUFFER as *mut [Volatile<u8>; SCREEN_WIDTH * SCREEN_HEIGHT * 2])
+        };
+
+        let mut buffer = VGABuffer { buffer };
         buffer.clear();
         buffer
     }
 
     pub fn write_byte(&mut self, x: usize, y: usize, byte: u8, color: ColorCode) {
-        // multiplied by 2 because each element is a text byte and a color byte
-        let offset: usize = (y * SCREEN_WIDTH + x) * 2;
+        let offset = (y * SCREEN_WIDTH + x) * 2;
 
-        if offset >= SCREEN_WIDTH * SCREEN_HEIGHT * 2 {
+        if offset + 1 >= self.buffer.len() {
             return;
         }
 
-        unsafe {
-            *self.buffer.offset(offset as isize) = byte;
-            *self.buffer.offset((offset + 1) as isize) = color.value;
-        }
+        self.buffer[offset].write(byte);
+        self.buffer[offset + 1].write(color.value);
     }
 
     pub fn scroll(&mut self, lines: usize) {
-        for i in SCREEN_WIDTH * lines..SCREEN_WIDTH * SCREEN_HEIGHT {
-            // multiplied by 2 because each element is a text byte and a color byte
-            let offset: isize = (i * 2) as isize;
+        let line_size = SCREEN_WIDTH * 2;
+        let screen_size = SCREEN_HEIGHT * line_size;
+        
+        let start = lines * SCREEN_WIDTH;
+        let end = SCREEN_WIDTH * SCREEN_HEIGHT;
 
-            unsafe {
-                *self.buffer.offset(offset - (SCREEN_WIDTH * 2) as isize) =
-                    *self.buffer.offset(offset);
-                *self.buffer.offset(offset - (SCREEN_WIDTH * 2) as isize + 1) =
-                    *self.buffer.offset(offset + 1);
+        for i in start..end {
+            let src = i * 2;
+            let dst = (i - lines * SCREEN_WIDTH) * 2;
+
+            if src + 1 >= screen_size || dst + 1 >= screen_size {
+                continue;
             }
+
+            self.buffer[dst].write(self.buffer[src].read());
+            self.buffer[dst + 1].write(self.buffer[src + 1].read());
         }
-
-        for i in (SCREEN_HEIGHT - lines) * SCREEN_WIDTH..SCREEN_HEIGHT * SCREEN_WIDTH {
-            // multiplied by 2 because each element is a text byte and a color byte
-            let offset: isize = (i * 2) as isize;
-
-            unsafe {
-                *self.buffer.offset(offset) = 0;
-                *self.buffer.offset(offset + 1) = 0;
-            }
+        
+        let start = (SCREEN_HEIGHT - lines) * SCREEN_WIDTH;
+        
+        for i in start..end {
+            let offset = i * 2;
+            self.buffer[offset].write(0);
+            self.buffer[offset + 1].write(0);
         }
     }
 
     pub fn clear(&mut self) {
-        for i in 0..SCREEN_HEIGHT {
-            for j in 0..SCREEN_WIDTH {
-                self.write_byte(i, j, 0, ColorCode::new(Color::White, Color::Black));
+        let blank = ColorCode::new(Color::White, Color::Black);
+        for y in 0..SCREEN_HEIGHT {
+            for x in 0..SCREEN_WIDTH {
+                self.write_byte(x, y, 0, blank);
             }
         }
     }
 }
+
